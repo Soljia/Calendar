@@ -32,6 +32,7 @@ import org.fossify.calendar.R
 import org.fossify.calendar.adapters.AutoCompleteTextViewAdapter
 import org.fossify.calendar.databinding.ActivityEventBinding
 import org.fossify.calendar.databinding.ItemAttendeeBinding
+import org.fossify.calendar.databinding.ItemEventReminderBinding
 import org.fossify.calendar.dialogs.DeleteEventDialog
 import org.fossify.calendar.dialogs.EditRepeatingEventDialog
 import org.fossify.calendar.dialogs.ReminderWarningDialog
@@ -83,12 +84,6 @@ import org.fossify.calendar.helpers.NEW_EVENT_START_TS
 import org.fossify.calendar.helpers.ORIGINAL_ATTENDEES
 import org.fossify.calendar.helpers.ORIGINAL_END_TS
 import org.fossify.calendar.helpers.ORIGINAL_START_TS
-import org.fossify.calendar.helpers.REMINDER_1_MINUTES
-import org.fossify.calendar.helpers.REMINDER_1_TYPE
-import org.fossify.calendar.helpers.REMINDER_2_MINUTES
-import org.fossify.calendar.helpers.REMINDER_2_TYPE
-import org.fossify.calendar.helpers.REMINDER_3_MINUTES
-import org.fossify.calendar.helpers.REMINDER_3_TYPE
 import org.fossify.calendar.helpers.REMINDER_EMAIL
 import org.fossify.calendar.helpers.REMINDER_NOTIFICATION
 import org.fossify.calendar.helpers.REMINDER_OFF
@@ -175,12 +170,7 @@ class EventActivity : SimpleActivity() {
     private val SELECT_TIME_ZONE_INTENT = 1
 
     private var mIsAllDayEvent = false
-    private var mReminder1Minutes = REMINDER_OFF
-    private var mReminder2Minutes = REMINDER_OFF
-    private var mReminder3Minutes = REMINDER_OFF
-    private var mReminder1Type = REMINDER_NOTIFICATION
-    private var mReminder2Type = REMINDER_NOTIFICATION
-    private var mReminder3Type = REMINDER_NOTIFICATION
+    private var mReminders = ArrayList<Reminder>()
     private var mRepeatInterval = 0
     private var mRepeatLimit = 0L
     private var mRepeatRule = 0
@@ -312,13 +302,7 @@ class EventActivity : SimpleActivity() {
             putLong(END_TS, mEventEndDateTime.seconds())
             putString(TIME_ZONE, mEvent.timeZone)
 
-            putInt(REMINDER_1_MINUTES, mReminder1Minutes)
-            putInt(REMINDER_2_MINUTES, mReminder2Minutes)
-            putInt(REMINDER_3_MINUTES, mReminder3Minutes)
-
-            putInt(REMINDER_1_TYPE, mReminder1Type)
-            putInt(REMINDER_2_TYPE, mReminder2Type)
-            putInt(REMINDER_3_TYPE, mReminder3Type)
+            putString("reminders", Gson().toJson(mReminders))
 
             putInt(REPEAT_INTERVAL, mRepeatInterval)
             putInt(REPEAT_RULE, mRepeatRule)
@@ -354,13 +338,8 @@ class EventActivity : SimpleActivity() {
             mEventEndDateTime = Formatter.getDateTimeFromTS(getLong(END_TS))
             mEvent.timeZone = getString(TIME_ZONE) ?: TimeZone.getDefault().id
 
-            mReminder1Minutes = getInt(REMINDER_1_MINUTES)
-            mReminder2Minutes = getInt(REMINDER_2_MINUTES)
-            mReminder3Minutes = getInt(REMINDER_3_MINUTES)
-
-            mReminder1Type = getInt(REMINDER_1_TYPE)
-            mReminder2Type = getInt(REMINDER_2_TYPE)
-            mReminder3Type = getInt(REMINDER_3_TYPE)
+            val reminderToken = object : TypeToken<ArrayList<Reminder>>() {}.type
+            mReminders = Gson().fromJson<ArrayList<Reminder>>(getString("reminders"), reminderToken) ?: ArrayList()
 
             mAccessLevel = getInt(CLASS)
             mAvailability = getInt(AVAILABILITY)
@@ -447,26 +426,13 @@ class EventActivity : SimpleActivity() {
         } else {
             mEvent = Event(null)
             config.apply {
-                mReminder1Minutes =
-                    if (usePreviousEventReminders && lastEventReminderMinutes1 >= -1) {
-                        lastEventReminderMinutes1
-                    } else {
-                        defaultReminder1
-                    }
-
-                mReminder2Minutes =
-                    if (usePreviousEventReminders && lastEventReminderMinutes2 >= -1) {
-                        lastEventReminderMinutes2
-                    } else {
-                        defaultReminder2
-                    }
-
-                mReminder3Minutes =
-                    if (usePreviousEventReminders && lastEventReminderMinutes3 >= -1) {
-                        lastEventReminderMinutes3
-                    } else {
-                        defaultReminder3
-                    }
+                val r1 = if (usePreviousEventReminders && lastEventReminderMinutes1 >= -1) lastEventReminderMinutes1 else defaultReminder1
+                val r2 = if (usePreviousEventReminders && lastEventReminderMinutes2 >= -1) lastEventReminderMinutes2 else defaultReminder2
+                val r3 = if (usePreviousEventReminders && lastEventReminderMinutes3 >= -1) lastEventReminderMinutes3 else defaultReminder3
+                mReminders = arrayListOf(r1, r2, r3)
+                    .filter { it != REMINDER_OFF }
+                    .map { Reminder(it, REMINDER_NOTIFICATION) }
+                    .toMutableList() as ArrayList<Reminder>
             }
 
             if (savedInstanceState == null) {
@@ -490,52 +456,6 @@ class EventActivity : SimpleActivity() {
         eventRepetition.setOnClickListener { showRepeatIntervalDialog() }
         eventRepetitionRuleHolder.setOnClickListener { showRepetitionRuleDialog() }
         eventRepetitionLimitHolder.setOnClickListener { showRepetitionTypePicker() }
-
-        eventReminder1.setOnClickListener {
-            handleNotificationAvailability {
-                if (config.wasAlarmWarningShown) {
-                    showReminder1Dialog()
-                } else {
-                    ReminderWarningDialog(this@EventActivity) {
-                        config.wasAlarmWarningShown = true
-                        showReminder1Dialog()
-                    }
-                }
-            }
-        }
-
-        eventReminder2.setOnClickListener { showReminder2Dialog() }
-        eventReminder3.setOnClickListener { showReminder3Dialog() }
-
-        eventReminder1Type.setOnClickListener {
-            showReminderTypePicker(mReminder1Type) {
-                mReminder1Type = it
-                updateReminderTypeImage(
-                    view = eventReminder1Type,
-                    reminder = Reminder(mReminder1Minutes, mReminder1Type)
-                )
-            }
-        }
-
-        eventReminder2Type.setOnClickListener {
-            showReminderTypePicker(mReminder2Type) {
-                mReminder2Type = it
-                updateReminderTypeImage(
-                    view = eventReminder2Type,
-                    reminder = Reminder(mReminder2Minutes, mReminder2Type)
-                )
-            }
-        }
-
-        eventReminder3Type.setOnClickListener {
-            showReminderTypePicker(mReminder3Type) {
-                mReminder3Type = it
-                updateReminderTypeImage(
-                    view = eventReminder3Type,
-                    reminder = Reminder(mReminder3Minutes, mReminder3Type)
-                )
-            }
-        }
 
         eventAccessLevel.setOnClickListener {
             showAccessLevelPicker(mAccessLevel) {
@@ -631,11 +551,7 @@ class EventActivity : SimpleActivity() {
     }
 
     private fun getReminders(): ArrayList<Reminder> {
-        return arrayListOf(
-            Reminder(mReminder1Minutes, mReminder1Type),
-            Reminder(mReminder2Minutes, mReminder2Type),
-            Reminder(mReminder3Minutes, mReminder3Type)
-        ).filter { it.minutes != REMINDER_OFF }
+        return mReminders.filter { it.minutes != REMINDER_OFF }
             .sortedBy { it.minutes }
             .toMutableList() as ArrayList<Reminder>
     }
@@ -734,12 +650,7 @@ class EventActivity : SimpleActivity() {
         binding.eventLocation.setText(mEvent.location)
         binding.eventDescription.setText(mEvent.description)
 
-        mReminder1Minutes = mEvent.reminder1Minutes
-        mReminder2Minutes = mEvent.reminder2Minutes
-        mReminder3Minutes = mEvent.reminder3Minutes
-        mReminder1Type = mEvent.reminder1Type
-        mReminder2Type = mEvent.reminder2Type
-        mReminder3Type = mEvent.reminder3Type
+        mReminders = mEvent.getReminders().toMutableList() as ArrayList<Reminder>
         mRepeatInterval = mEvent.repeatInterval
         mRepeatLimit = mEvent.repeatLimit
         mRepeatRule = mEvent.repeatRule
@@ -825,12 +736,7 @@ class EventActivity : SimpleActivity() {
         mEvent.apply {
             startTS = newStartTS
             endTS = newEndTS
-            reminder1Minutes = mReminder1Minutes
-            reminder1Type = mReminder1Type
-            reminder2Minutes = mReminder2Minutes
-            reminder2Type = mReminder2Type
-            reminder3Minutes = mReminder3Minutes
-            reminder3Type = mReminder3Type
+            reminders = mReminders.toList()
             status = mStatus
             calendarId = mCalendarId
         }
@@ -843,24 +749,47 @@ class EventActivity : SimpleActivity() {
         }
     }
 
-    private fun showReminder1Dialog() {
-        showPickSecondsDialogHelper(mReminder1Minutes, showDuringDayOption = mIsAllDayEvent) {
-            mReminder1Minutes = if (it == -1 || it == 0) it else it / 60
-            checkReminderTexts()
+    private fun showReminderDialog(index: Int) {
+        val currentMinutes = mReminders.getOrNull(index)?.minutes ?: REMINDER_OFF
+        showPickSecondsDialogHelper(currentMinutes, showDuringDayOption = mIsAllDayEvent) {
+            val newMinutes = if (it == -1 || it == 0) it else it / 60
+            if (newMinutes == REMINDER_OFF) {
+                if (index < mReminders.size) {
+                    mReminders.removeAt(index)
+                }
+            } else {
+                val currentType = mReminders.getOrNull(index)?.type ?: REMINDER_NOTIFICATION
+                val reminder = Reminder(newMinutes, currentType)
+                if (index < mReminders.size) {
+                    mReminders[index] = reminder
+                } else {
+                    mReminders.add(reminder)
+                }
+            }
+            updateRemindersUI()
         }
     }
 
-    private fun showReminder2Dialog() {
-        showPickSecondsDialogHelper(mReminder2Minutes, showDuringDayOption = mIsAllDayEvent) {
-            mReminder2Minutes = if (it == -1 || it == 0) it else it / 60
-            checkReminderTexts()
+    private fun showAddReminderDialog() {
+        handleNotificationAvailability {
+            if (config.wasAlarmWarningShown) {
+                addReminderWithPicker()
+            } else {
+                ReminderWarningDialog(this@EventActivity) {
+                    config.wasAlarmWarningShown = true
+                    addReminderWithPicker()
+                }
+            }
         }
     }
 
-    private fun showReminder3Dialog() {
-        showPickSecondsDialogHelper(mReminder3Minutes, showDuringDayOption = mIsAllDayEvent) {
-            mReminder3Minutes = if (it == -1 || it == 0) it else it / 60
-            checkReminderTexts()
+    private fun addReminderWithPicker() {
+        showPickSecondsDialogHelper(REMINDER_OFF, showDuringDayOption = mIsAllDayEvent) {
+            val newMinutes = if (it == -1 || it == 0) it else it / 60
+            if (newMinutes != REMINDER_OFF) {
+                mReminders.add(Reminder(newMinutes, REMINDER_NOTIFICATION))
+                updateRemindersUI()
+            }
         }
     }
 
@@ -1173,7 +1102,7 @@ class EventActivity : SimpleActivity() {
             }
 
             updateCalendarInfo(calendar)
-            updateReminderTypeImages()
+            updateRemindersUI()
             updateCalDAVVisibility()
             updateAvailabilityText()
             updateStatusText()
@@ -1243,42 +1172,46 @@ class EventActivity : SimpleActivity() {
     }
 
     private fun checkReminderTexts() {
-        updateReminder1Text()
-        updateReminder2Text()
-        updateReminder3Text()
-        updateReminderTypeImages()
+        updateRemindersUI()
     }
 
-    private fun updateReminder1Text() {
-        binding.eventReminder1.text = getFormattedMinutes(mReminder1Minutes)
-    }
+    private fun updateRemindersUI() {
+        val container = binding.eventRemindersHolder
+        container.removeAllViews()
 
-    private fun updateReminder2Text() {
-        binding.eventReminder2.apply {
-            beGoneIf(isGone() && mReminder1Minutes == REMINDER_OFF)
-            if (mReminder2Minutes == REMINDER_OFF) {
-                text = resources.getString(R.string.add_another_reminder)
-                alpha = 0.4f
-            } else {
-                text = getFormattedMinutes(mReminder2Minutes)
-                alpha = 1f
-            }
-        }
-    }
-
-    private fun updateReminder3Text() {
-        binding.eventReminder3.apply {
-            beGoneIf(
-                isGone() && (mReminder2Minutes == REMINDER_OFF || mReminder1Minutes == REMINDER_OFF)
+        for ((index, reminder) in mReminders.withIndex()) {
+            val itemBinding = org.fossify.calendar.databinding.ItemEventReminderBinding.inflate(
+                layoutInflater, container, false
             )
-            if (mReminder3Minutes == REMINDER_OFF) {
-                text = resources.getString(R.string.add_another_reminder)
-                alpha = 0.4f
-            } else {
-                text = getFormattedMinutes(mReminder3Minutes)
-                alpha = 1f
+            itemBinding.reminderTime.text = getFormattedMinutes(reminder.minutes)
+            itemBinding.reminderTime.setOnClickListener { showReminderDialog(index) }
+
+            val isCalDAV = mEventCalendarId != STORED_LOCALLY_ONLY
+            itemBinding.reminderType.beVisibleIf(isCalDAV)
+            if (isCalDAV) {
+                updateReminderTypeImage(itemBinding.reminderType, reminder)
+                itemBinding.reminderType.setOnClickListener {
+                    showReminderTypePicker(reminder.type) { newType ->
+                        mReminders[index] = reminder.copy(type = newType)
+                        updateRemindersUI()
+                    }
+                }
             }
+
+            container.addView(itemBinding.root)
         }
+
+        // "Add another reminder" row
+        val addRow = org.fossify.calendar.databinding.ItemEventReminderBinding.inflate(
+            layoutInflater, container, false
+        )
+        addRow.reminderTime.text = resources.getString(R.string.add_another_reminder)
+        addRow.reminderTime.alpha = 0.4f
+        addRow.reminderType.beGone()
+        addRow.reminderTime.setOnClickListener { showAddReminderDialog() }
+        container.addView(addRow.root)
+
+        updateTextColors(container)
     }
 
     private fun showReminderTypePicker(currentValue: Int, callback: (Int) -> Unit) {
@@ -1330,21 +1263,6 @@ class EventActivity : SimpleActivity() {
         }
     }
 
-    private fun updateReminderTypeImages() {
-        updateReminderTypeImage(
-            view = binding.eventReminder1Type,
-            reminder = Reminder(mReminder1Minutes, mReminder1Type)
-        )
-        updateReminderTypeImage(
-            view = binding.eventReminder2Type,
-            reminder = Reminder(mReminder2Minutes, mReminder2Type)
-        )
-        updateReminderTypeImage(
-            view = binding.eventReminder3Type,
-            reminder = Reminder(mReminder3Minutes, mReminder3Type)
-        )
-    }
-
     private fun updateCalDAVVisibility() {
         val isSyncedEvent = mEventCalendarId != STORED_LOCALLY_ONLY
         binding.eventAttendeesImage.beVisibleIf(isSyncedEvent)
@@ -1359,13 +1277,11 @@ class EventActivity : SimpleActivity() {
     }
 
     private fun updateReminderTypeImage(view: ImageView, reminder: Reminder) {
-        view.beVisibleIf(reminder.minutes != REMINDER_OFF && mEventCalendarId != STORED_LOCALLY_ONLY)
         val drawable = if (reminder.type == REMINDER_NOTIFICATION) {
             R.drawable.ic_bell_outline_vector
         } else {
             R.drawable.ic_mail_outline_vector
         }
-
         val icon = resources.getColoredDrawableWithColor(drawable, getProperTextColor())
         view.setImageDrawable(icon)
     }
@@ -1412,7 +1328,7 @@ class EventActivity : SimpleActivity() {
                 calendarsDB.getCalendarWithId(mCalendarId) ?: return@ensureBackgroundThread
             runOnUiThread {
                 updateCalendarInfo(calendar)
-                updateReminderTypeImages()
+                updateRemindersUI()
                 updateCalDAVVisibility()
             }
         }
@@ -1574,7 +1490,7 @@ class EventActivity : SimpleActivity() {
     }
 
     private fun saveCurrentEvent() {
-        if (config.wasAlarmWarningShown || (mReminder1Minutes == REMINDER_OFF && mReminder2Minutes == REMINDER_OFF && mReminder3Minutes == REMINDER_OFF)) {
+        if (config.wasAlarmWarningShown || mReminders.isEmpty()) {
             ensureBackgroundThread {
                 saveEvent()
             }
@@ -1645,29 +1561,24 @@ class EventActivity : SimpleActivity() {
         }
         mEventCalendarId = if (selectedCaldavId == 0) STORED_LOCALLY_ONLY else selectedCaldavId
 
-        val reminders = getReminders()
-        if (!binding.eventAllDay.isChecked) {
-            if ((reminders.getOrNull(2)?.minutes ?: 0) < -1) reminders.removeAt(2)
-            if ((reminders.getOrNull(1)?.minutes ?: 0) < -1) reminders.removeAt(1)
-            if ((reminders.getOrNull(0)?.minutes ?: 0) < -1) reminders.removeAt(0)
+        val reminders = getReminders().let { list ->
+            if (!binding.eventAllDay.isChecked) {
+                list.filter { it.minutes >= -1 }.toMutableList() as ArrayList<Reminder>
+            } else list
         }
 
-        val reminder1 = reminders.getOrNull(0) ?: Reminder(REMINDER_OFF, REMINDER_NOTIFICATION)
-        val reminder2 = reminders.getOrNull(1) ?: Reminder(REMINDER_OFF, REMINDER_NOTIFICATION)
-        val reminder3 = reminders.getOrNull(2) ?: Reminder(REMINDER_OFF, REMINDER_NOTIFICATION)
+        // For local-only events, force notification type
+        if (mEventCalendarId == STORED_LOCALLY_ONLY) {
+            reminders.forEachIndexed { i, r -> reminders[i] = r.copy(type = REMINDER_NOTIFICATION) }
+        }
 
-        mReminder1Type =
-            if (mEventCalendarId == STORED_LOCALLY_ONLY) REMINDER_NOTIFICATION else reminder1.type
-        mReminder2Type =
-            if (mEventCalendarId == STORED_LOCALLY_ONLY) REMINDER_NOTIFICATION else reminder2.type
-        mReminder3Type =
-            if (mEventCalendarId == STORED_LOCALLY_ONLY) REMINDER_NOTIFICATION else reminder3.type
+        mReminders = reminders
 
         config.apply {
             if (usePreviousEventReminders) {
-                lastEventReminderMinutes1 = reminder1.minutes
-                lastEventReminderMinutes2 = reminder2.minutes
-                lastEventReminderMinutes3 = reminder3.minutes
+                lastEventReminderMinutes1 = reminders.getOrNull(0)?.minutes ?: REMINDER_OFF
+                lastEventReminderMinutes2 = reminders.getOrNull(1)?.minutes ?: REMINDER_OFF
+                lastEventReminderMinutes3 = reminders.getOrNull(2)?.minutes ?: REMINDER_OFF
             }
         }
 
@@ -1676,12 +1587,7 @@ class EventActivity : SimpleActivity() {
             endTS = newEndTS
             title = newTitle
             description = binding.eventDescription.value
-            reminder1Minutes = reminder1.minutes
-            reminder2Minutes = reminder2.minutes
-            reminder3Minutes = reminder3.minutes
-            reminder1Type = mReminder1Type
-            reminder2Type = mReminder2Type
-            reminder3Type = mReminder3Type
+            this.reminders = reminders.toList()
             repeatInterval = mRepeatInterval
             importId = newImportId
             timeZone =

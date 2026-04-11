@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal">
+
+    <org.fossify.commons.views.MyTextView
+        android:id="@+id/reminder_time"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:background="?attr/selectableItemBackground"
+        android:ellipsize="end"
+        android:lines="1"
+        android:paddingTop="@dimen/activity_margin"
+        android:paddingEnd="@dimen/activity_margin"
+        android:paddingBottom="@dimen/activity_margin"
+        android:textSize="@dimen/day_text_size"
+        tools:text="10 minutes before" />
+
+    <ImageView
+        android:id="@+id/reminder_type"
+        android:layout_width="@dimen/smaller_icon_size"
+        android:layout_height="@dimen/smaller_icon_size"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="@dimen/small_margin"
+        android:layout_marginEnd="@dimen/medium_margin"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:padding="@dimen/medium_margin"
+        android:src="@drawable/ic_bell_outline_vector" />
+
+</LinearLayout>

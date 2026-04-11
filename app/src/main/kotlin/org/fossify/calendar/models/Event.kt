@@ -17,7 +17,6 @@ import org.fossify.calendar.helpers.FLAG_TASK_COMPLETED
 import org.fossify.calendar.helpers.Formatter
 import org.fossify.calendar.helpers.LOCAL_CALENDAR_ID
 import org.fossify.calendar.helpers.MONTH
-import org.fossify.calendar.helpers.REMINDER_NOTIFICATION
 import org.fossify.calendar.helpers.REMINDER_OFF
 import org.fossify.calendar.helpers.REPEAT_ORDER_WEEKDAY
 import org.fossify.calendar.helpers.REPEAT_ORDER_WEEKDAY_USE_LAST
@@ -44,12 +43,7 @@ data class Event(
     @ColumnInfo(name = "title") var title: String = "",
     @ColumnInfo(name = "location") var location: String = "",
     @ColumnInfo(name = "description") var description: String = "",
-    @ColumnInfo(name = "reminder_1_minutes") var reminder1Minutes: Int = REMINDER_OFF,
-    @ColumnInfo(name = "reminder_2_minutes") var reminder2Minutes: Int = REMINDER_OFF,
-    @ColumnInfo(name = "reminder_3_minutes") var reminder3Minutes: Int = REMINDER_OFF,
-    @ColumnInfo(name = "reminder_1_type") var reminder1Type: Int = REMINDER_NOTIFICATION,
-    @ColumnInfo(name = "reminder_2_type") var reminder2Type: Int = REMINDER_NOTIFICATION,
-    @ColumnInfo(name = "reminder_3_type") var reminder3Type: Int = REMINDER_NOTIFICATION,
+    @ColumnInfo(name = "reminders") var reminders: List<Reminder> = emptyList(),
     @ColumnInfo(name = "repeat_interval") var repeatInterval: Int = 0,
     @ColumnInfo(name = "repeat_rule") var repeatRule: Int = 0,
     @ColumnInfo(name = "repeat_limit") var repeatLimit: Long = 0L,
@@ -184,11 +178,7 @@ data class Event(
     fun isTask() = type == TYPE_TASK
     fun isTaskCompleted() = isTask() && flags and FLAG_TASK_COMPLETED != 0
 
-    fun getReminders() = listOf(
-        Reminder(reminder1Minutes, reminder1Type),
-        Reminder(reminder2Minutes, reminder2Type),
-        Reminder(reminder3Minutes, reminder3Type)
-    ).filter { it.minutes != REMINDER_OFF }
+    fun getReminders() = reminders.filter { it.minutes != REMINDER_OFF }
 
     // properly return the start time of all-day events as midnight
     fun getEventStartTS(): Long {

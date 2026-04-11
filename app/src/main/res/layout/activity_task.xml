@@ -153,72 +153,25 @@
                 android:layout_width="@dimen/smaller_icon_size"
                 android:layout_height="@dimen/smaller_icon_size"
                 android:layout_below="@+id/task_date_time_divider"
-                android:layout_alignTop="@+id/task_reminder_1"
-                android:layout_alignBottom="@+id/task_reminder_1"
+                android:layout_alignTop="@+id/task_reminders_holder"
                 android:layout_marginStart="@dimen/normal_margin"
                 android:padding="@dimen/medium_margin"
                 android:src="@drawable/ic_bell_outline_vector" />
 
-            <org.fossify.commons.views.MyTextView
-                android:id="@+id/task_reminder_1"
+            <LinearLayout
+                android:id="@+id/task_reminders_holder"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_below="@+id/task_date_time_divider"
                 android:layout_marginStart="@dimen/small_margin"
                 android:layout_toEndOf="@+id/task_reminder_image"
-                android:background="?attr/selectableItemBackground"
-                android:ellipsize="end"
-                android:lines="1"
-                android:paddingStart="@dimen/zero"
-                android:paddingTop="@dimen/activity_margin"
-                android:paddingEnd="@dimen/activity_margin"
-                android:paddingBottom="@dimen/activity_margin"
-                android:textSize="@dimen/day_text_size"
-                tools:text="@string/add_another_reminder" />
-
-            <org.fossify.commons.views.MyTextView
-                android:id="@+id/task_reminder_2"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_below="@+id/task_reminder_1"
-                android:layout_alignStart="@+id/task_reminder_1"
-                android:alpha="0.4"
-                android:background="?attr/selectableItemBackground"
-                android:ellipsize="end"
-                android:lines="1"
-                android:paddingStart="@dimen/zero"
-                android:paddingTop="@dimen/activity_margin"
-                android:paddingEnd="@dimen/activity_margin"
-                android:paddingBottom="@dimen/activity_margin"
-                android:text="@string/add_another_reminder"
-                android:textSize="@dimen/day_text_size"
-                android:visibility="gone"
-                tools:text="@string/add_another_reminder" />
-
-            <org.fossify.commons.views.MyTextView
-                android:id="@+id/task_reminder_3"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_below="@+id/task_reminder_2"
-                android:layout_alignStart="@+id/task_reminder_1"
-                android:alpha="0.4"
-                android:background="?attr/selectableItemBackground"
-                android:ellipsize="end"
-                android:lines="1"
-                android:paddingStart="@dimen/zero"
-                android:paddingTop="@dimen/activity_margin"
-                android:paddingEnd="@dimen/activity_margin"
-                android:paddingBottom="@dimen/activity_margin"
-                android:text="@string/add_another_reminder"
-                android:textSize="@dimen/day_text_size"
-                android:visibility="gone"
-                tools:text="@string/add_another_reminder" />
+                android:orientation="vertical" />
 
             <ImageView
                 android:id="@+id/task_caldav_calendar_divider"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/divider_height"
-                android:layout_below="@+id/task_reminder_3"
+                android:layout_below="@+id/task_reminders_holder"
                 android:layout_marginTop="@dimen/medium_margin"
                 android:layout_marginBottom="@dimen/medium_margin"
                 android:background="@color/divider_grey"

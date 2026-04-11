@@ -79,8 +79,11 @@ import org.fossify.calendar.helpers.YEARLY_VIEW
 import org.fossify.calendar.helpers.YEAR_TO_OPEN
 import org.fossify.calendar.helpers.getActivityToOpen
 import org.fossify.calendar.jobs.CalDAVUpdateListener
+import org.fossify.calendar.helpers.REMINDER_NOTIFICATION
+import org.fossify.calendar.helpers.REMINDER_OFF
 import org.fossify.calendar.models.Event
 import org.fossify.calendar.models.HolidayInfo
+import org.fossify.calendar.models.Reminder
 import org.fossify.calendar.models.ListEvent
 import org.fossify.calendar.models.ListItem
 import org.fossify.calendar.models.ListSectionDay
@@ -944,9 +947,7 @@ class MainActivity : SimpleActivity(), RefreshRecyclerViewListener {
                         startTS = timestamp,
                         endTS = timestamp,
                         title = name,
-                        reminder1Minutes = reminders[0],
-                        reminder2Minutes = reminders[1],
-                        reminder3Minutes = reminders[2],
+                        reminders = reminders.filter { it != REMINDER_OFF }.map { Reminder(it, REMINDER_NOTIFICATION) },
                         importId = contactId,
                         timeZone = DateTimeZone.getDefault().id,
                         flags = flags,
@@ -1044,9 +1045,7 @@ class MainActivity : SimpleActivity(), RefreshRecyclerViewListener {
                         startTS = timestamp,
                         endTS = timestamp,
                         title = contact.name,
-                        reminder1Minutes = reminders[0],
-                        reminder2Minutes = reminders[1],
-                        reminder3Minutes = reminders[2],
+                        reminders = reminders.filter { it != REMINDER_OFF }.map { Reminder(it, REMINDER_NOTIFICATION) },
                         importId = contact.contactId.toString(),
                         timeZone = DateTimeZone.getDefault().id,
                         flags = flags,

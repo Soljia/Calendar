@@ -290,57 +290,40 @@ class IcsImporter(val activity: SimpleActivity) {
                             continue
                         }
 
-                        var reminders = eventReminders?.map { reminderMinutes ->
-                            Reminder(
-                                reminderMinutes,
-                                REMINDER_NOTIFICATION
-                            )
-                        } ?: arrayListOf(
-                            Reminder(
-                                curReminderMinutes.getOrElse(0) { REMINDER_OFF },
-                                curReminderActions.getOrElse(0) { REMINDER_NOTIFICATION }),
-                            Reminder(
-                                curReminderMinutes.getOrElse(1) { REMINDER_OFF },
-                                curReminderActions.getOrElse(1) { REMINDER_NOTIFICATION }),
-                            Reminder(
-                                curReminderMinutes.getOrElse(2) { REMINDER_OFF },
-                                curReminderActions.getOrElse(2) { REMINDER_NOTIFICATION })
-                        )
-
-                        reminders = reminders.sortedBy { it.minutes }
-                            .sortedBy { it.minutes == REMINDER_OFF }
-                            .toMutableList() as ArrayList<Reminder>
+                        val reminders: List<Reminder> = if (eventReminders != null) {
+                            eventReminders.map { Reminder(it, REMINDER_NOTIFICATION) }
+                        } else {
+                            curReminderMinutes.zip(curReminderActions) { minutes, type ->
+                                Reminder(minutes, type)
+                            }.filter { it.minutes != REMINDER_OFF }
+                                .sortedBy { it.minutes }
+                        }
 
                         val calendar = calendars.firstOrNull { it.id == curCalendarId }
                         val source =
                             if (calDAVCalendarId == 0 || calendar?.isSyncedCalendar() == false) SOURCE_IMPORTED_ICS else "$CALDAV-$calDAVCalendarId"
                         val isAllDay = curFlags and FLAG_ALL_DAY != 0
                         val event = Event(
-                            null,
-                            curStart,
-                            curEnd,
-                            curTitle,
-                            curLocation,
-                            curDescription,
-                            reminders[0].minutes,
-                            reminders[1].minutes,
-                            reminders[2].minutes,
-                            reminders[0].type,
-                            reminders[1].type,
-                            reminders[2].type,
-                            curRepeatInterval,
-                            curRepeatRule,
-                            curRepeatLimit,
-                            curRepeatExceptions,
-                            emptyList(),
-                            curImportId,
-                            DateTimeZone.getDefault().id,
-                            curFlags,
-                            curCalendarId,
-                            0,
-                            curLastModified,
-                            source,
-                            curAvailability,
+                            id = null,
+                            startTS = curStart,
+                            endTS = curEnd,
+                            title = curTitle,
+                            location = curLocation,
+                            description = curDescription,
+                            reminders = reminders,
+                            repeatInterval = curRepeatInterval,
+                            repeatRule = curRepeatRule,
+                            repeatLimit = curRepeatLimit,
+                            repetitionExceptions = curRepeatExceptions,
+                            attendees = emptyList(),
+                            importId = curImportId,
+                            timeZone = DateTimeZone.getDefault().id,
+                            flags = curFlags,
+                            calendarId = curCalendarId,
+                            parentId = 0,
+                            lastUpdated = curLastModified,
+                            source = source,
+                            availability = curAvailability,
                             type = curType,
                             status = curStatus,
                             accessLevel = curAccessLevel,

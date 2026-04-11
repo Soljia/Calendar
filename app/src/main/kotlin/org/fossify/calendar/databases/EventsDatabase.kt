@@ -24,7 +24,7 @@ import java.util.concurrent.Executors
 
 @Database(
     entities = [Event::class, CalendarEntity::class, Widget::class, Task::class],
-    version = 11
+    version = 12
 )
 @TypeConverters(Converters::class)
 abstract class EventsDatabase : RoomDatabase() {
@@ -65,6 +65,7 @@ abstract class EventsDatabase : RoomDatabase() {
                             .addMigrations(MIGRATION_8_9)
                             .addMigrations(MIGRATION_9_10)
                             .addMigrations(MIGRATION_10_11)
+                            .addMigrations(MIGRATION_11_12)
                             .build()
                         db!!.openHelper.setWriteAheadLoggingEnabled(true)
                     }
@@ -179,6 +180,37 @@ abstract class EventsDatabase : RoomDatabase() {
                 database.apply {
                     execSQL("ALTER TABLE widgets ADD COLUMN header INTEGER NOT NULL DEFAULT 1")
                     execSQL("ALTER TABLE events ADD COLUMN access_level INTEGER NOT NULL DEFAULT 0")
+                }
+            }
+        }
+
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.apply {
+                    execSQL("ALTER TABLE events ADD COLUMN reminders TEXT NOT NULL DEFAULT '[]'")
+                    // Migrate existing 3-reminder columns into the new JSON array column
+                    execSQL(
+                        """
+                        UPDATE events SET reminders =
+                            CASE
+                                WHEN reminder_1_minutes != -1 AND reminder_2_minutes != -1 AND reminder_3_minutes != -1
+                                    THEN '[{"minutes":' || reminder_1_minutes || ',"type":' || reminder_1_type || '},{"minutes":' || reminder_2_minutes || ',"type":' || reminder_2_type || '},{"minutes":' || reminder_3_minutes || ',"type":' || reminder_3_type || '}]'
+                                WHEN reminder_1_minutes != -1 AND reminder_2_minutes != -1
+                                    THEN '[{"minutes":' || reminder_1_minutes || ',"type":' || reminder_1_type || '},{"minutes":' || reminder_2_minutes || ',"type":' || reminder_2_type || '}]'
+                                WHEN reminder_1_minutes != -1 AND reminder_3_minutes != -1
+                                    THEN '[{"minutes":' || reminder_1_minutes || ',"type":' || reminder_1_type || '},{"minutes":' || reminder_3_minutes || ',"type":' || reminder_3_type || '}]'
+                                WHEN reminder_2_minutes != -1 AND reminder_3_minutes != -1
+                                    THEN '[{"minutes":' || reminder_2_minutes || ',"type":' || reminder_2_type || '},{"minutes":' || reminder_3_minutes || ',"type":' || reminder_3_type || '}]'
+                                WHEN reminder_1_minutes != -1
+                                    THEN '[{"minutes":' || reminder_1_minutes || ',"type":' || reminder_1_type || '}]'
+                                WHEN reminder_2_minutes != -1
+                                    THEN '[{"minutes":' || reminder_2_minutes || ',"type":' || reminder_2_type || '}]'
+                                WHEN reminder_3_minutes != -1
+                                    THEN '[{"minutes":' || reminder_3_minutes || ',"type":' || reminder_3_type || '}]'
+                                ELSE '[]'
+                            END
+                        """.trimIndent()
+                    )
                 }
             }
         }

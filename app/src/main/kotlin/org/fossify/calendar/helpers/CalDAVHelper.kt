@@ -252,9 +252,6 @@ class CalDAVHelper(val context: Context) {
                 endTS = startTS + Parser().parseDurationSeconds(duration)
             }
 
-            val reminder1 = reminders.getOrNull(0)
-            val reminder2 = reminders.getOrNull(1)
-            val reminder3 = reminders.getOrNull(2)
             val importId = getCalDAVEventImportId(calendarId, id)
             val eventTimeZone = cursor.getStringValue(Events.EVENT_TIMEZONE)
                 ?: cursor.getStringValue(Events.CALENDAR_TIME_ZONE) ?: DateTimeZone.getDefault().id
@@ -268,12 +265,7 @@ class CalDAVHelper(val context: Context) {
                 title = title,
                 location = location,
                 description = description,
-                reminder1Minutes = reminder1?.minutes ?: REMINDER_OFF,
-                reminder2Minutes = reminder2?.minutes ?: REMINDER_OFF,
-                reminder3Minutes = reminder3?.minutes ?: REMINDER_OFF,
-                reminder1Type = reminder1?.type ?: REMINDER_NOTIFICATION,
-                reminder2Type = reminder2?.type ?: REMINDER_NOTIFICATION,
-                reminder3Type = reminder3?.type ?: REMINDER_NOTIFICATION,
+                reminders = reminders,
                 repeatInterval = repeatRule.repeatInterval,
                 repeatRule = repeatRule.repeatRule,
                 repeatLimit = repeatRule.repeatLimit,

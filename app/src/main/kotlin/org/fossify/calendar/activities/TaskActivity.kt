@@ -10,6 +10,7 @@ import com.google.android.material.timepicker.MaterialTimePicker
 import com.google.android.material.timepicker.TimeFormat
 import org.fossify.calendar.R
 import org.fossify.calendar.databinding.ActivityTaskBinding
+import org.fossify.calendar.databinding.ItemEventReminderBinding
 import org.fossify.calendar.dialogs.DeleteEventDialog
 import org.fossify.calendar.dialogs.EditRepeatingEventDialog
 import org.fossify.calendar.dialogs.ReminderWarningDialog
@@ -51,9 +52,6 @@ import org.fossify.calendar.helpers.IS_TASK_COMPLETED
 import org.fossify.calendar.helpers.LOCAL_CALENDAR_ID
 import org.fossify.calendar.helpers.NEW_EVENT_START_TS
 import org.fossify.calendar.helpers.ORIGINAL_START_TS
-import org.fossify.calendar.helpers.REMINDER_1_MINUTES
-import org.fossify.calendar.helpers.REMINDER_2_MINUTES
-import org.fossify.calendar.helpers.REMINDER_3_MINUTES
 import org.fossify.calendar.helpers.REMINDER_NOTIFICATION
 import org.fossify.calendar.helpers.REMINDER_OFF
 import org.fossify.calendar.helpers.REPEAT_INTERVAL
@@ -118,12 +116,7 @@ class TaskActivity : SimpleActivity() {
     private lateinit var mTask: Event
 
     private var mIsAllDayTask = false
-    private var mReminder1Minutes = REMINDER_OFF
-    private var mReminder2Minutes = REMINDER_OFF
-    private var mReminder3Minutes = REMINDER_OFF
-    private var mReminder1Type = REMINDER_NOTIFICATION
-    private var mReminder2Type = REMINDER_NOTIFICATION
-    private var mReminder3Type = REMINDER_NOTIFICATION
+    private var mReminders = ArrayList<Reminder>()
     private var mRepeatInterval = 0
     private var mRepeatLimit = 0L
     private var mRepeatRule = 0
@@ -275,9 +268,7 @@ class TaskActivity : SimpleActivity() {
             putLong(START_TS, mTaskDateTime.seconds())
             putLong(CALENDAR_ID, mCalendarId)
 
-            putInt(REMINDER_1_MINUTES, mReminder1Minutes)
-            putInt(REMINDER_2_MINUTES, mReminder2Minutes)
-            putInt(REMINDER_3_MINUTES, mReminder3Minutes)
+            putString("reminders", com.google.gson.Gson().toJson(mReminders))
 
             putInt(REPEAT_INTERVAL, mRepeatInterval)
             putInt(REPEAT_RULE, mRepeatRule)
@@ -303,9 +294,8 @@ class TaskActivity : SimpleActivity() {
             mTaskDateTime = Formatter.getDateTimeFromTS(getLong(START_TS))
             mCalendarId = getLong(CALENDAR_ID)
 
-            mReminder1Minutes = getInt(REMINDER_1_MINUTES)
-            mReminder2Minutes = getInt(REMINDER_2_MINUTES)
-            mReminder3Minutes = getInt(REMINDER_3_MINUTES)
+            val reminderToken = object : com.google.gson.reflect.TypeToken<ArrayList<Reminder>>() {}.type
+            mReminders = com.google.gson.Gson().fromJson<ArrayList<Reminder>>(getString("reminders"), reminderToken) ?: ArrayList()
 
             mRepeatInterval = getInt(REPEAT_INTERVAL)
             mRepeatRule = getInt(REPEAT_RULE)
@@ -369,12 +359,13 @@ class TaskActivity : SimpleActivity() {
     private fun setupNewTask(savedInstanceState: Bundle?) {
         mTask = Event(null)
         config.apply {
-            mReminder1Minutes =
-                if (usePreviousEventReminders && lastEventReminderMinutes1 >= -1) lastEventReminderMinutes1 else defaultReminder1
-            mReminder2Minutes =
-                if (usePreviousEventReminders && lastEventReminderMinutes2 >= -1) lastEventReminderMinutes2 else defaultReminder2
-            mReminder3Minutes =
-                if (usePreviousEventReminders && lastEventReminderMinutes3 >= -1) lastEventReminderMinutes3 else defaultReminder3
+            val r1 = if (usePreviousEventReminders && lastEventReminderMinutes1 >= -1) lastEventReminderMinutes1 else defaultReminder1
+            val r2 = if (usePreviousEventReminders && lastEventReminderMinutes2 >= -1) lastEventReminderMinutes2 else defaultReminder2
+            val r3 = if (usePreviousEventReminders && lastEventReminderMinutes3 >= -1) lastEventReminderMinutes3 else defaultReminder3
+            mReminders = arrayListOf(r1, r2, r3)
+                .filter { it != REMINDER_OFF }
+                .map { Reminder(it, REMINDER_NOTIFICATION) }
+                .toMutableList() as ArrayList<Reminder>
         }
 
         if (savedInstanceState == null) setupNewTask()
@@ -406,21 +397,6 @@ class TaskActivity : SimpleActivity() {
         taskRepetitionRuleHolder.setOnClickListener { showRepetitionRuleDialog() }
         taskRepetitionLimitHolder.setOnClickListener { showRepetitionTypePicker() }
 
-        taskReminder1.setOnClickListener {
-            handleNotificationAvailability {
-                if (config.wasAlarmWarningShown) {
-                    showReminder1Dialog()
-                } else {
-                    ReminderWarningDialog(this@TaskActivity) {
-                        config.wasAlarmWarningShown = true
-                        showReminder1Dialog()
-                    }
-                }
-            }
-        }
-
-        taskReminder2.setOnClickListener { showReminder2Dialog() }
-        taskReminder3.setOnClickListener { showReminder3Dialog() }
         taskColorHolder.setOnClickListener { showTaskColorDialog() }
     }
 
@@ -433,12 +409,7 @@ class TaskActivity : SimpleActivity() {
         binding.taskToolbar.title = getString(R.string.edit_task)
 
         mCalendarId = mTask.calendarId
-        mReminder1Minutes = mTask.reminder1Minutes
-        mReminder2Minutes = mTask.reminder2Minutes
-        mReminder3Minutes = mTask.reminder3Minutes
-        mReminder1Type = mTask.reminder1Type
-        mReminder2Type = mTask.reminder2Type
-        mReminder3Type = mTask.reminder3Type
+        mReminders = mTask.getReminders().toMutableList() as ArrayList<Reminder>
         mRepeatInterval = mTask.repeatInterval
         mRepeatLimit = mTask.repeatLimit
         mRepeatRule = mTask.repeatRule
@@ -463,18 +434,13 @@ class TaskActivity : SimpleActivity() {
         mTask.apply {
             this.startTS = mTaskDateTime.seconds()
             this.endTS = mTaskDateTime.seconds()
-            reminder1Minutes = mReminder1Minutes
-            reminder1Type = mReminder1Type
-            reminder2Minutes = mReminder2Minutes
-            reminder2Type = mReminder2Type
-            reminder3Minutes = mReminder3Minutes
-            reminder3Type = mReminder3Type
+            reminders = mReminders.toList()
             calendarId = mCalendarId
         }
     }
 
     private fun saveCurrentTask() {
-        if (config.wasAlarmWarningShown || (mReminder1Minutes == REMINDER_OFF && mReminder2Minutes == REMINDER_OFF && mReminder3Minutes == REMINDER_OFF)) {
+        if (config.wasAlarmWarningShown || mReminders.isEmpty()) {
             ensureBackgroundThread {
                 saveTask()
             }
@@ -505,30 +471,19 @@ class TaskActivity : SimpleActivity() {
             generateImportId()
         }
 
-        val reminders = getReminders()
-        if (!binding.taskAllDay.isChecked) {
-            if ((reminders.getOrNull(2)?.minutes ?: 0) < -1) {
-                reminders.removeAt(2)
-            }
-
-            if ((reminders.getOrNull(1)?.minutes ?: 0) < -1) {
-                reminders.removeAt(1)
-            }
-
-            if ((reminders.getOrNull(0)?.minutes ?: 0) < -1) {
-                reminders.removeAt(0)
-            }
+        val reminders = getReminders().let { list ->
+            if (!binding.taskAllDay.isChecked) {
+                list.filter { it.minutes >= -1 }.toMutableList() as ArrayList<Reminder>
+            } else list
         }
 
-        val reminder1 = reminders.getOrNull(0) ?: Reminder(REMINDER_OFF, REMINDER_NOTIFICATION)
-        val reminder2 = reminders.getOrNull(1) ?: Reminder(REMINDER_OFF, REMINDER_NOTIFICATION)
-        val reminder3 = reminders.getOrNull(2) ?: Reminder(REMINDER_OFF, REMINDER_NOTIFICATION)
+        mReminders = reminders
 
         config.apply {
             if (usePreviousEventReminders) {
-                lastEventReminderMinutes1 = reminder1.minutes
-                lastEventReminderMinutes2 = reminder2.minutes
-                lastEventReminderMinutes3 = reminder3.minutes
+                lastEventReminderMinutes1 = reminders.getOrNull(0)?.minutes ?: REMINDER_OFF
+                lastEventReminderMinutes2 = reminders.getOrNull(1)?.minutes ?: REMINDER_OFF
+                lastEventReminderMinutes3 = reminders.getOrNull(2)?.minutes ?: REMINDER_OFF
             }
         }
 
@@ -552,12 +507,7 @@ class TaskActivity : SimpleActivity() {
             calendarId = mCalendarId
             type = TYPE_TASK
 
-            reminder1Minutes = reminder1.minutes
-            reminder1Type = mReminder1Type
-            reminder2Minutes = reminder2.minutes
-            reminder2Type = mReminder2Type
-            reminder3Minutes = reminder3.minutes
-            reminder3Type = mReminder3Type
+            this.reminders = reminders.toList()
 
             repeatInterval = mRepeatInterval
             repeatLimit = if (repeatInterval == 0) 0 else mRepeatLimit
@@ -849,71 +799,79 @@ class TaskActivity : SimpleActivity() {
     }
 
     private fun updateReminderTexts() {
-        updateReminder1Text()
-        updateReminder2Text()
-        updateReminder3Text()
+        updateRemindersUI()
     }
 
-    private fun updateReminder1Text() {
-        binding.taskReminder1.text = getFormattedMinutes(mReminder1Minutes)
+    private fun updateRemindersUI() {
+        val container = binding.taskRemindersHolder
+        container.removeAllViews()
+
+        for ((index, reminder) in mReminders.withIndex()) {
+            val itemBinding = ItemEventReminderBinding.inflate(layoutInflater, container, false)
+            itemBinding.reminderTime.text = getFormattedMinutes(reminder.minutes)
+            itemBinding.reminderTime.setOnClickListener { showReminderDialog(index) }
+            itemBinding.reminderType.beGone()
+            container.addView(itemBinding.root)
+        }
+
+        // "Add another reminder" row
+        val addRow = ItemEventReminderBinding.inflate(layoutInflater, container, false)
+        addRow.reminderTime.text = resources.getString(R.string.add_another_reminder)
+        addRow.reminderTime.alpha = 0.4f
+        addRow.reminderType.beGone()
+        addRow.reminderTime.setOnClickListener { showAddReminderDialog() }
+        container.addView(addRow.root)
+
+        updateTextColors(container)
     }
 
-    private fun updateReminder2Text() {
-        binding.taskReminder2.apply {
-            beGoneIf(isGone() && mReminder1Minutes == REMINDER_OFF)
-            if (mReminder2Minutes == REMINDER_OFF) {
-                text = resources.getString(R.string.add_another_reminder)
-                alpha = 0.4f
+    private fun showReminderDialog(index: Int) {
+        val currentMinutes = mReminders.getOrNull(index)?.minutes ?: REMINDER_OFF
+        showPickSecondsDialogHelper(currentMinutes, showDuringDayOption = mIsAllDayTask) {
+            val newMinutes = if (it == -1 || it == 0) it else it / 60
+            if (newMinutes == REMINDER_OFF) {
+                if (index < mReminders.size) {
+                    mReminders.removeAt(index)
+                }
             } else {
-                text = getFormattedMinutes(mReminder2Minutes)
-                alpha = 1f
+                val reminder = Reminder(newMinutes, REMINDER_NOTIFICATION)
+                if (index < mReminders.size) {
+                    mReminders[index] = reminder
+                } else {
+                    mReminders.add(reminder)
+                }
+            }
+            updateRemindersUI()
+        }
+    }
+
+    private fun showAddReminderDialog() {
+        handleNotificationAvailability {
+            if (config.wasAlarmWarningShown) {
+                addReminderWithPicker()
+            } else {
+                ReminderWarningDialog(this@TaskActivity) {
+                    config.wasAlarmWarningShown = true
+                    addReminderWithPicker()
+                }
             }
         }
     }
 
-    private fun updateReminder3Text() {
-        binding.taskReminder3.apply {
-            beGoneIf(isGone() && (mReminder2Minutes == REMINDER_OFF || mReminder1Minutes == REMINDER_OFF))
-            if (mReminder3Minutes == REMINDER_OFF) {
-                text = resources.getString(R.string.add_another_reminder)
-                alpha = 0.4f
-            } else {
-                text = getFormattedMinutes(mReminder3Minutes)
-                alpha = 1f
+    private fun addReminderWithPicker() {
+        showPickSecondsDialogHelper(REMINDER_OFF, showDuringDayOption = mIsAllDayTask) {
+            val newMinutes = if (it == -1 || it == 0) it else it / 60
+            if (newMinutes != REMINDER_OFF) {
+                mReminders.add(Reminder(newMinutes, REMINDER_NOTIFICATION))
+                updateRemindersUI()
             }
-        }
-    }
-
-    private fun showReminder1Dialog() {
-        showPickSecondsDialogHelper(mReminder1Minutes, showDuringDayOption = mIsAllDayTask) {
-            mReminder1Minutes = if (it == -1 || it == 0) it else it / 60
-            updateReminderTexts()
-        }
-    }
-
-    private fun showReminder2Dialog() {
-        showPickSecondsDialogHelper(mReminder2Minutes, showDuringDayOption = mIsAllDayTask) {
-            mReminder2Minutes = if (it == -1 || it == 0) it else it / 60
-            updateReminderTexts()
-        }
-    }
-
-    private fun showReminder3Dialog() {
-        showPickSecondsDialogHelper(mReminder3Minutes, showDuringDayOption = mIsAllDayTask) {
-            mReminder3Minutes = if (it == -1 || it == 0) it else it / 60
-            updateReminderTexts()
         }
     }
 
     private fun getReminders(): ArrayList<Reminder> {
-        var reminders = arrayListOf(
-            Reminder(mReminder1Minutes, mReminder1Type),
-            Reminder(mReminder2Minutes, mReminder2Type),
-            Reminder(mReminder3Minutes, mReminder3Type)
-        )
-        reminders = reminders.filter { it.minutes != REMINDER_OFF }.sortedBy { it.minutes }
+        return mReminders.filter { it.minutes != REMINDER_OFF }
+            .sortedBy { it.minutes }
             .toMutableList() as ArrayList<Reminder>
-        return reminders
     }
 
     private fun showCalendarDialog() {
