@@ -100,7 +100,8 @@ class CalDAVHelper(val context: Context) {
             Calendars.ACCOUNT_TYPE,
             Calendars.OWNER_ACCOUNT,
             Calendars.CALENDAR_COLOR,
-            Calendars.CALENDAR_ACCESS_LEVEL
+            Calendars.CALENDAR_ACCESS_LEVEL,
+            Calendars.MAX_REMINDERS
         )
 
         val selection = if (ids.trim().isNotEmpty()) "${Calendars._ID} IN ($ids)" else null
@@ -113,7 +114,8 @@ class CalDAVHelper(val context: Context) {
                     accountType = cursor.getStringValue(Calendars.ACCOUNT_TYPE),
                     ownerName = cursor.getStringValue(Calendars.OWNER_ACCOUNT) ?: "",
                     color = cursor.getIntValue(Calendars.CALENDAR_COLOR),
-                    accessLevel = cursor.getIntValue(Calendars.CALENDAR_ACCESS_LEVEL)
+                    accessLevel = cursor.getIntValue(Calendars.CALENDAR_ACCESS_LEVEL),
+                    maxReminders = cursor.getIntValueOrNull(Calendars.MAX_REMINDERS) ?: Int.MAX_VALUE
                 )
             )
         }
@@ -446,7 +448,10 @@ class CalDAVHelper(val context: Context) {
 
     private fun setupCalDAVEventReminders(event: Event) {
         clearEventReminders(event)
-        event.getReminders().forEach {
+        val calendarId = event.getCalDAVCalendarId()
+        val maxReminders = getCalDAVCalendars(calendarId.toString(), false)
+            .firstOrNull()?.maxReminders ?: Int.MAX_VALUE
+        event.getReminders().take(maxReminders).forEach {
             val contentValues = ContentValues().apply {
                 put(Reminders.MINUTES, it.minutes)
                 put(

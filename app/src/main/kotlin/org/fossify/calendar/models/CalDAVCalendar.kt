@@ -7,7 +7,8 @@ data class CalDAVCalendar(
     val accountType: String,
     val ownerName: String,
     var color: Int,
-    val accessLevel: Int
+    val accessLevel: Int,
+    val maxReminders: Int = Int.MAX_VALUE
 ) {
     fun canWrite() = accessLevel >= 500
 
