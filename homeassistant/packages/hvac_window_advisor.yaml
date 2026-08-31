@@ -1,0 +1,405 @@
+###############################################################################
+# HVAC Window Advisor
+# -----------------------------------------------------------------------------
+# Tells you when to open the windows so the outdoors does your heating or
+# cooling for you, and when to close them again.
+#
+#   * "open_for_cooling" - the outdoor feels-like temperature stays BELOW your
+#     cooling set point for the whole look-ahead window (default 8 h), so
+#     opening up saves the air conditioner some work.
+#   * "open_for_heating" - the outdoor feels-like temperature stays ABOVE your
+#     heating set point for the whole window, so opening up saves the furnace
+#     some work.
+#   * "keep_closed" - the forecast is not favourable (or not favourable for
+#     long enough), so the house is better off sealed.
+#
+# The look-ahead requirement is strict: EVERY forecast hour inside the window
+# must be on the right side of the set point. One warm hour in the middle of an
+# otherwise cool night suppresses the notification, which is the point - you
+# should not be opening windows for a benefit that evaporates in an hour.
+#
+# -----------------------------------------------------------------------------
+# SETUP - three things to edit, all marked with "# <-- EDIT":
+#   1. climate.hvac                -> your thermostat entity
+#   2. weather.forecast_home       -> a weather entity that supports HOURLY
+#                                     forecasts (Met.no, Open-Meteo, AccuWeather,
+#                                     Pirate Weather, ...)
+#   3. notify.mobile_app_your_phone -> your notify service
+#
+# Requires Home Assistant 2024.3 or newer (for the weather.get_forecasts
+# service and its response_variable).
+#
+# Install: copy this file to <config>/packages/hvac_window_advisor.yaml and make
+# sure configuration.yaml contains:
+#
+#   homeassistant:
+#     packages: !include_dir_named packages
+#
+# See homeassistant/README.md in this repository for the long version.
+###############################################################################
+
+input_boolean:
+  window_advisor_enabled:
+    name: Window advisor notifications
+    icon: mdi:bell-outline
+
+  # ON  = only advise when the HVAC would actually be running (indoor
+  #       temperature is on the wrong side of the set point and the thermostat
+  #       is in a mode that could act on it). This is what stops you being told
+  #       to "open for cooling" at 3 a.m. in January.
+  # OFF = purely literal - advise whenever the forecast is on the right side of
+  #       the set point, regardless of what the house or the thermostat is doing.
+  window_advisor_require_hvac_demand:
+    name: Window advisor requires HVAC demand
+    icon: mdi:thermostat
+
+input_number:
+  # How far past the set point the forecast has to be before it is worth the
+  # trouble of opening a window. In whatever unit your system uses.
+  window_advisor_margin:
+    name: Window advisor margin
+    min: 0
+    max: 10
+    step: 0.5
+    initial: 1
+    mode: box
+    unit_of_measurement: "°"
+    icon: mdi:plus-minus-variant
+
+  # Extra slack applied only while the advisor is already saying "open", so a
+  # forecast hovering on the threshold does not flip the notification back and
+  # forth every quarter hour.
+  window_advisor_hysteresis:
+    name: Window advisor hysteresis
+    min: 0
+    max: 5
+    step: 0.5
+    initial: 0.5
+    mode: box
+    unit_of_measurement: "°"
+    icon: mdi:swap-vertical
+
+  # The "next N hours" the forecast has to agree on.
+  window_advisor_forecast_hours:
+    name: Window advisor forecast window
+    min: 1
+    max: 24
+    step: 1
+    initial: 8
+    mode: box
+    unit_of_measurement: h
+    icon: mdi:clock-time-eight-outline
+
+###############################################################################
+# The advisor sensor. Trigger-based so it can call weather.get_forecasts and
+# use the response.
+###############################################################################
+template:
+  - trigger:
+      - platform: homeassistant
+        event: start
+      - platform: time_pattern
+        minutes: "/15"
+      - platform: state
+        entity_id:
+          - input_number.window_advisor_margin
+          - input_number.window_advisor_hysteresis
+          - input_number.window_advisor_forecast_hours
+          - input_boolean.window_advisor_require_hvac_demand
+      # Re-evaluate immediately when a set point is changed. Thermostats in
+      # heat_cool mode use target_temp_low/high instead of temperature; the
+      # triggers for the attributes your thermostat does not have simply never
+      # fire, so it is safe to keep all three.
+      - platform: state
+        entity_id: climate.hvac                        # <-- EDIT
+        attribute: temperature
+      - platform: state
+        entity_id: climate.hvac                        # <-- EDIT
+        attribute: target_temp_low
+      - platform: state
+        entity_id: climate.hvac                        # <-- EDIT
+        attribute: target_temp_high
+
+    action:
+      - variables:
+          climate_entity: climate.hvac                 # <-- EDIT
+          weather_entity: weather.forecast_home        # <-- EDIT
+          # Optional: a dedicated indoor thermometer. Leave as "" to use the
+          # thermostat's own current_temperature attribute.
+          indoor_entity: ""
+
+      # continue_on_error keeps a flaky weather integration from freezing the
+      # sensor on a stale value; the templates below degrade to "unknown".
+      - service: weather.get_forecasts
+        continue_on_error: true
+        target:
+          entity_id: "{{ weather_entity }}"
+        data:
+          type: hourly
+        response_variable: forecast_response
+
+      # ---------------------------------------------------------------------
+      # Build the hourly feels-like series.
+      #
+      # If the weather integration publishes apparent_temperature we use it. If
+      # it does not (most do not, in hourly forecasts), we compute the Steadman
+      # apparent temperature - the same "feels like" the Australian BoM and
+      # Open-Meteo use - from temperature, relative humidity and wind speed:
+      #
+      #   AT = Ta + 0.33 * e - 0.70 * ws - 4.00      (Ta in °C, ws in m/s)
+      #   e  = RH/100 * 6.105 * exp(17.27 * Ta / (237.7 + Ta))
+      #
+      # It is continuous across the whole range, so unlike a heat-index/
+      # wind-chill pair it does not go blind in the 10-27 °C band where most of
+      # the interesting window-opening weather actually lives.
+      # ---------------------------------------------------------------------
+      - variables:
+          hours: "{{ states('input_number.window_advisor_forecast_hours') | int(8) }}"
+          margin: "{{ states('input_number.window_advisor_margin') | float(1) }}"
+          hysteresis: "{{ states('input_number.window_advisor_hysteresis') | float(0.5) }}"
+          temperature_unit: "{{ state_attr(weather_entity, 'temperature_unit') | default('°C', true) }}"
+          hourly: >-
+            {% set fcast = forecast_response[weather_entity].forecast
+                           if forecast_response is defined
+                              and forecast_response is mapping
+                              and weather_entity in forecast_response
+                           else [] %}
+            {% set unit = state_attr(weather_entity, 'temperature_unit') | default('°C', true) %}
+            {% set is_f = '°F' in unit %}
+            {% set w_unit = state_attr(weather_entity, 'wind_speed_unit') | default('km/h', true) %}
+            {% set to_ms = {'m/s': 1.0, 'km/h': 0.2777778, 'mph': 0.44704,
+                            'kn': 0.5144444, 'ft/s': 0.3048}.get(w_unit, 0.2777778) %}
+            {% set euler = 2.718281828459045 %}
+            {% set span = states('input_number.window_advisor_forecast_hours') | int(8) %}
+            {% set cutoff = now() + timedelta(hours=span) %}
+            {% set earliest = now() - timedelta(hours=1) %}
+            {% set ns = namespace(rows=[]) %}
+            {% for f in fcast %}
+              {% set dt = as_datetime(f.get('datetime')) %}
+              {% set t = f.get('temperature') | float(none) %}
+              {% if dt is not none and t is not none and dt >= earliest and dt <= cutoff %}
+                {% set tc = ((t - 32) * 5 / 9) if is_f else t %}
+                {% set rh = f.get('humidity') | float(50) %}
+                {% set ws = (f.get('wind_speed') | float(0)) * to_ms %}
+                {% set vp = (rh / 100) * 6.105 * (euler ** (17.27 * tc / (237.7 + tc))) %}
+                {% set at_c = tc + 0.33 * vp - 0.70 * ws - 4.0 %}
+                {% set at = (at_c * 9 / 5 + 32) if is_f else at_c %}
+                {% set reported = f.get('apparent_temperature') %}
+                {% set ns.rows = ns.rows + [{
+                     'datetime': dt.isoformat(),
+                     'temperature': t | round(1),
+                     'feels_like': (reported if reported is not none else at) | float(0) | round(1),
+                     'estimated': reported is none }] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.rows }}
+
+      - variables:
+          # Does the forecast we got actually reach the end of the window? A
+          # three-hourly forecast is fine; a forecast that runs out after two
+          # hours must not be allowed to masquerade as eight hours of agreement.
+          covered: >-
+            {% if hourly | count == 0 %}
+              {{ false }}
+            {% else %}
+              {% set step = (as_datetime(hourly[1].datetime) - as_datetime(hourly[0].datetime)).total_seconds()
+                            if hourly | count > 1 else 3600 %}
+              {{ (as_datetime(hourly[-1].datetime) + timedelta(seconds=step)) >= (now() + timedelta(hours=hours)) }}
+            {% endif %}
+          feels_like_min: "{{ (hourly | map(attribute='feels_like') | min) if hourly else none }}"
+          feels_like_max: "{{ (hourly | map(attribute='feels_like') | max) if hourly else none }}"
+          feels_like_now: "{{ hourly[0].feels_like if hourly else none }}"
+          hvac_mode: "{{ states(climate_entity) }}"
+          # heat_cool / auto thermostats expose a band instead of a single
+          # target; fall back to the single set point for everything else.
+          cooling_setpoint: >-
+            {{ (state_attr(climate_entity, 'target_temp_high')
+                if state_attr(climate_entity, 'target_temp_high') is not none
+                else state_attr(climate_entity, 'temperature')) | float(none) }}
+          heating_setpoint: >-
+            {{ (state_attr(climate_entity, 'target_temp_low')
+                if state_attr(climate_entity, 'target_temp_low') is not none
+                else state_attr(climate_entity, 'temperature')) | float(none) }}
+          indoor_temperature: >-
+            {{ (states(indoor_entity) if indoor_entity
+                else state_attr(climate_entity, 'current_temperature')) | float(none) }}
+
+      - variables:
+          # Relax the threshold by `hysteresis` while we are already advising
+          # "open", so the advice does not chatter around the boundary.
+          previously_open: "{{ this is defined and this.state in ['open_for_cooling', 'open_for_heating'] }}"
+          demand_gate: "{{ is_state('input_boolean.window_advisor_require_hvac_demand', 'on') }}"
+
+      - variables:
+          cooling_opportunity: >-
+            {{ covered
+               and cooling_setpoint is not none
+               and feels_like_max is not none
+               and feels_like_max <= (cooling_setpoint - margin
+                                      + (hysteresis if previously_open else 0)) }}
+          heating_opportunity: >-
+            {{ covered
+               and heating_setpoint is not none
+               and feels_like_min is not none
+               and feels_like_min >= (heating_setpoint + margin
+                                      - (hysteresis if previously_open else 0)) }}
+          cooling_demand: >-
+            {{ (not demand_gate)
+               or (indoor_temperature is not none
+                   and cooling_setpoint is not none
+                   and indoor_temperature > cooling_setpoint
+                   and hvac_mode in ['cool', 'heat_cool', 'auto']) }}
+          heating_demand: >-
+            {{ (not demand_gate)
+               or (indoor_temperature is not none
+                   and heating_setpoint is not none
+                   and indoor_temperature < heating_setpoint
+                   and hvac_mode in ['heat', 'heat_cool', 'auto']) }}
+
+      - variables:
+          advisor_state: >-
+            {% if not covered %}
+              unknown
+            {% elif cooling_opportunity and cooling_demand %}
+              open_for_cooling
+            {% elif heating_opportunity and heating_demand %}
+              open_for_heating
+            {% else %}
+              keep_closed
+            {% endif %}
+          advisor_reason: >-
+            {% if not covered %}
+              No hourly forecast covering the next {{ hours }} h from {{ weather_entity }}.
+            {% elif cooling_opportunity and not cooling_demand %}
+              Outdoor feels-like stays below the cooling set point, but the house is not calling for cooling.
+            {% elif heating_opportunity and not heating_demand %}
+              Outdoor feels-like stays above the heating set point, but the house is not calling for heat.
+            {% elif cooling_opportunity %}
+              Feels-like peaks at {{ feels_like_max }} {{ temperature_unit }}, at or under the cooling set point for the next {{ hours }} h.
+            {% elif heating_opportunity %}
+              Feels-like bottoms out at {{ feels_like_min }} {{ temperature_unit }}, at or above the heating set point for the next {{ hours }} h.
+            {% else %}
+              Feels-like ranges {{ feels_like_min }}-{{ feels_like_max }} {{ temperature_unit }} over the next {{ hours }} h; not consistently on either side of the set point.
+            {% endif %}
+
+    sensor:
+      - name: Window Advisor
+        unique_id: hvac_window_advisor
+        state: "{{ advisor_state }}"
+        icon: >-
+          {% if advisor_state == 'open_for_cooling' %} mdi:window-open-variant
+          {% elif advisor_state == 'open_for_heating' %} mdi:window-open
+          {% elif advisor_state == 'keep_closed' %} mdi:window-closed-variant
+          {% else %} mdi:help-circle-outline {% endif %}
+        attributes:
+          reason: "{{ advisor_reason }}"
+          hvac_mode: "{{ hvac_mode }}"
+          cooling_setpoint: "{{ cooling_setpoint }}"
+          heating_setpoint: "{{ heating_setpoint }}"
+          indoor_temperature: "{{ indoor_temperature }}"
+          feels_like_now: "{{ feels_like_now }}"
+          feels_like_min: "{{ feels_like_min }}"
+          feels_like_max: "{{ feels_like_max }}"
+          temperature_unit: "{{ temperature_unit }}"
+          forecast_hours: "{{ hours }}"
+          margin: "{{ margin }}"
+          hysteresis: "{{ hysteresis }}"
+          forecast_covers_window: "{{ covered }}"
+          hourly_feels_like: "{{ hourly }}"
+          # True when the feels-like values were derived by this package rather
+          # than published by the weather integration.
+          feels_like_estimated: "{{ hourly | selectattr('estimated') | list | count > 0 }}"
+
+###############################################################################
+# Notifications
+###############################################################################
+automation:
+  - id: hvac_window_advisor_open
+    alias: "Window advisor: open the windows"
+    description: >-
+      Notifies when the outdoor feels-like temperature will stay on the helpful
+      side of the HVAC set point for the whole look-ahead window.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.window_advisor
+        to: open_for_cooling
+        id: cooling
+      - platform: state
+        entity_id: sensor.window_advisor
+        to: open_for_heating
+        id: heating
+    condition:
+      - condition: state
+        entity_id: input_boolean.window_advisor_enabled
+        state: "on"
+    action:
+      - variables:
+          notify_service: notify.mobile_app_your_phone   # <-- EDIT
+          unit: "{{ state_attr('sensor.window_advisor', 'temperature_unit') }}"
+          hours: "{{ state_attr('sensor.window_advisor', 'forecast_hours') }}"
+          title: >-
+            {% if trigger.id == 'cooling' %}
+              Open the windows - free cooling
+            {% else %}
+              Open the windows - free heat
+            {% endif %}
+          message: >-
+            {% set s = 'sensor.window_advisor' %}
+            {% if trigger.id == 'cooling' %}
+              Outside feels like {{ state_attr(s, 'feels_like_now') }}{{ unit }} and stays at or below
+              {{ state_attr(s, 'feels_like_max') }}{{ unit }} for the next {{ hours }} h - under your
+              {{ state_attr(s, 'cooling_setpoint') }}{{ unit }} cooling set point the whole time.
+              Indoors is {{ state_attr(s, 'indoor_temperature') }}{{ unit }}.
+            {% else %}
+              Outside feels like {{ state_attr(s, 'feels_like_now') }}{{ unit }} and stays at or above
+              {{ state_attr(s, 'feels_like_min') }}{{ unit }} for the next {{ hours }} h - over your
+              {{ state_attr(s, 'heating_setpoint') }}{{ unit }} heating set point the whole time.
+              Indoors is {{ state_attr(s, 'indoor_temperature') }}{{ unit }}.
+            {% endif %}
+      - service: "{{ notify_service }}"
+        data:
+          title: "{{ title }}"
+          message: "{{ message }}"
+          data:
+            # Same tag on every advisor notification, so a new one replaces the
+            # old rather than stacking up on the lock screen.
+            tag: hvac_window_advisor
+            channel: Window advisor
+            notification_icon: >-
+              {{ 'mdi:window-open-variant' if trigger.id == 'cooling' else 'mdi:window-open' }}
+
+  - id: hvac_window_advisor_close
+    alias: "Window advisor: close the windows"
+    description: >-
+      Notifies when the outdoor feels-like temperature is no longer favourable,
+      so the windows should go back shut before the HVAC has to fight them.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.window_advisor
+        from: open_for_cooling
+        to: keep_closed
+      - platform: state
+        entity_id: sensor.window_advisor
+        from: open_for_heating
+        to: keep_closed
+    condition:
+      - condition: state
+        entity_id: input_boolean.window_advisor_enabled
+        state: "on"
+    action:
+      - variables:
+          notify_service: notify.mobile_app_your_phone   # <-- EDIT
+          unit: "{{ state_attr('sensor.window_advisor', 'temperature_unit') }}"
+      - service: "{{ notify_service }}"
+        data:
+          title: Close the windows
+          message: >-
+            {% set s = 'sensor.window_advisor' %}
+            Outdoor feels-like is back to {{ state_attr(s, 'feels_like_now') }}{{ unit }}
+            and no longer helps ({{ state_attr(s, 'reason') }})
+          data:
+            tag: hvac_window_advisor
+            channel: Window advisor
+            notification_icon: mdi:window-closed-variant
