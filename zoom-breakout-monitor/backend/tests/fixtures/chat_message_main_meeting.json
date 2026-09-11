@@ -1,0 +1,24 @@
+{
+  "event": "meeting.chat_message_sent",
+  "event_ts": 1757000120000,
+  "payload": {
+    "account_id": "SANITIZED_ACCOUNT",
+    "object": {
+      "id": "81234567890",
+      "uuid": "aBcDeFgHiJkLmNoPqRsTuA==",
+      "topic": "Chemistry Class",
+      "type": 2,
+      "chat_message": {
+        "date_time": "2026-09-11T16:11:00Z",
+        "message_id": "msg-main-0001",
+        "sender_name": "Instructor",
+        "sender_session_id": "sender-session-host",
+        "sender_type": "host",
+        "sender_context": "main_meeting",
+        "recipient_context": "main_meeting",
+        "recipient_type": "everyone",
+        "message_content": "Five more minutes everyone."
+      }
+    }
+  }
+}

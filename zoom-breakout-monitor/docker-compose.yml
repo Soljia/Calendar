@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      args:
+        BASE_REGISTRY: ${BASE_REGISTRY:-docker.io}
+    image: zoom-breakout-monitor-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Inside the container the database always lives on the mounted volume,
+      # regardless of what .env says, so the data survives a rebuild.
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///data/zoomchat.db}
+    volumes:
+      - chat-data:/app/data
+    expose:
+      - "8000"
+    # Not published to the host by default: reach the API through the web
+    # service, which keeps everything on a single origin. Uncomment to debug.
+    # ports:
+    #   - "127.0.0.1:8000:8000"
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        BASE_REGISTRY: ${BASE_REGISTRY:-docker.io}
+    image: zoom-breakout-monitor-web
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-8080}:80"
+
+volumes:
+  chat-data:

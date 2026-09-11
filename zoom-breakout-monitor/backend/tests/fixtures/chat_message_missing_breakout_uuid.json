@@ -1,0 +1,21 @@
+{
+  "event": "meeting.chat_message_sent",
+  "event_ts": 1757000300000,
+  "payload": {
+    "account_id": "SANITIZED_ACCOUNT",
+    "object": {
+      "id": "81234567890",
+      "uuid": "aBcDeFgHiJkLmNoPqRsTuA==",
+      "topic": "Chemistry Class",
+      "chat_message": {
+        "date_time": "2026-09-11T16:14:00Z",
+        "message_id": "msg-nouuid-0001",
+        "sender_name": "Dana",
+        "sender_session_id": "sender-session-dana",
+        "sender_context": "breakout_room",
+        "recipient_type": "everyone",
+        "message_content": "Our room number is not showing up."
+      }
+    }
+  }
+}

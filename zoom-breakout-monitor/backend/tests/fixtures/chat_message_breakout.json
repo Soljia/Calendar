@@ -1,0 +1,29 @@
+{
+  "event": "meeting.chat_message_sent",
+  "event_ts": 1757000000000,
+  "payload": {
+    "account_id": "SANITIZED_ACCOUNT",
+    "object": {
+      "id": "81234567890",
+      "uuid": "aBcDeFgHiJkLmNoPqRsTuA==",
+      "host_id": "SANITIZED_HOST",
+      "topic": "Chemistry Class",
+      "type": 2,
+      "start_time": "2026-09-11T15:02:00Z",
+      "timezone": "America/New_York",
+      "duration": 60,
+      "breakout_room_uuid": "11111111-1111-4111-8111-111111111111",
+      "chat_message": {
+        "date_time": "2026-09-11T16:10:03Z",
+        "message_id": "msg-breakout-0001",
+        "sender_name": "Amy",
+        "sender_session_id": "sender-session-amy",
+        "sender_type": "participant",
+        "sender_context": "breakout_room",
+        "recipient_context": "breakout_room",
+        "recipient_type": "everyone",
+        "message_content": "Can the teacher come help?"
+      }
+    }
+  }
+}

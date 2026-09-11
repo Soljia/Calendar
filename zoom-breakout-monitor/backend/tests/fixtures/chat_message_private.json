@@ -1,0 +1,26 @@
+{
+  "event": "meeting.chat_message_sent",
+  "event_ts": 1757000180000,
+  "payload": {
+    "account_id": "SANITIZED_ACCOUNT",
+    "object": {
+      "id": "81234567890",
+      "uuid": "aBcDeFgHiJkLmNoPqRsTuA==",
+      "topic": "Chemistry Class",
+      "type": 2,
+      "breakout_room_uuid": "11111111-1111-4111-8111-111111111111",
+      "chat_message": {
+        "date_time": "2026-09-11T16:12:00Z",
+        "message_id": "msg-private-0001",
+        "sender_name": "Amy",
+        "sender_session_id": "sender-session-amy",
+        "sender_context": "breakout_room",
+        "recipient_context": "breakout_room",
+        "recipient_type": "individual",
+        "recipient_name": "Bob",
+        "recipient_session_id": "recipient-session-bob",
+        "message_content": "I am stuck, do not tell the others."
+      }
+    }
+  }
+}

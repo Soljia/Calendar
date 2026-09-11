@@ -1,0 +1,21 @@
+{
+  "event": "meeting.chat_message_sent",
+  "event_ts": 1757000240000,
+  "payload": {
+    "account_id": "SANITIZED_ACCOUNT",
+    "object": {
+      "id": "81234567890",
+      "uuid": "aBcDeFgHiJkLmNoPqRsTuA==",
+      "topic": "Chemistry Class",
+      "chat_message": {
+        "date_time": "2026-09-11T16:13:00Z",
+        "message_id": "msg-alt-0001",
+        "breakout_room_uuid": "33333333-3333-4333-8333-333333333333",
+        "sender_name": "Carol",
+        "sender_id": "sender-carol",
+        "recipient_type": "everyone",
+        "message": "We are confused about step two."
+      }
+    }
+  }
+}

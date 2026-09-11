@@ -1,0 +1,17 @@
+{
+  "event": "meeting.participant_joined",
+  "event_ts": 1757000420000,
+  "payload": {
+    "account_id": "SANITIZED_ACCOUNT",
+    "object": {
+      "id": "81234567890",
+      "uuid": "aBcDeFgHiJkLmNoPqRsTuA==",
+      "topic": "Chemistry Class",
+      "participant": {
+        "user_id": "16778240",
+        "user_name": "Amy",
+        "join_time": "2026-09-11T16:09:00Z"
+      }
+    }
+  }
+}
