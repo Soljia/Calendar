@@ -1,5 +1,7 @@
 # Gmail Venmo "paid you" auto-forwarder
 
+> **Need forwards within seconds?** Use the hosted IMAP IDLE worker in [`server/`](server/README.md). The Apps Script below checks once a minute.
+
 A Google Apps Script that forwards every Gmail message containing **both**
 "paid you" and "Venmo" to 4 recipients.
 
