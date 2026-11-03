@@ -24,7 +24,7 @@ const RECIPIENTS = [
 const PROCESSED_LABEL = 'Venmo-Forwarded';
 
 /** How often (in minutes) to check for new emails: 1, 5, 10, 15 or 30. */
-const CHECK_EVERY_MINUTES = 5;
+const CHECK_EVERY_MINUTES = 1;
 
 /**
  * Only look at recent mail so the first run doesn't forward your whole

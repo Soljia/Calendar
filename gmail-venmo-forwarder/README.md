@@ -14,7 +14,7 @@ A Google Apps Script that forwards every Gmail message containing **both**
    permissions prompt (choose *Advanced → Go to project* if Google shows an
    "unverified app" warning; this is your own script).
 
-That's it. The script now checks every 5 minutes, forwards new matches, and
+That's it. The script now checks every minute, forwards new matches, and
 tags each handled thread with the Gmail label **Venmo-Forwarded** so nothing
 is sent twice.
 
