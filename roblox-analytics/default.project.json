@@ -1,0 +1,15 @@
+{
+  "name": "roblox-analytics",
+  "tree": {
+    "$className": "DataModel",
+    "ServerScriptService": {
+      "Analytics": { "$path": "roblox/Analytics" },
+      "AnalyticsBootstrap": { "$path": "roblox/AnalyticsBootstrap.server.lua" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "AnalyticsClient": { "$path": "roblox/AnalyticsClient.client.lua" }
+      }
+    }
+  }
+}
